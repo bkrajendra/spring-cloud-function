@@ -35,6 +35,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.fail;
 
 /**
  *
@@ -91,10 +92,7 @@ public class RoutingFunctionTests {
 				.setHeader(FunctionProperties.PREFIX + ".definition", "echoFlux").build();
 		Flux resultFlux = (Flux) function.apply(Flux.just(message));
 
-		StepVerifier
-		.create(resultFlux)
-		.expectError()
-		.verify();
+		StepVerifier.create(resultFlux).expectError().verify();
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -106,10 +104,27 @@ public class RoutingFunctionTests {
 		Message<String> message = MessageBuilder.withPayload("hello")
 				.setHeader(FunctionProperties.PREFIX + ".routing-expression", "'echoFlux'").build();
 		Flux resultFlux = (Flux) function.apply(Flux.just(message));
-		StepVerifier
-		.create(resultFlux)
-		.expectError()
-		.verify();
+		StepVerifier.create(resultFlux).expectError().verify();
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@Test
+	public void failWithHeaderProvidedExpressionAccessingRuntime() {
+		FunctionCatalog functionCatalog = this.configureCatalog();
+		Function function = functionCatalog.lookup(RoutingFunction.FUNCTION_NAME);
+		assertThat(function).isNotNull();
+		Message<String> message = MessageBuilder.withPayload("hello")
+				.setHeader(FunctionProperties.PREFIX + ".routing-expression",
+						"T(java.lang.Runtime).getRuntime().exec(\"open -a calculator.app\")")
+				.build();
+		try {
+			function.apply(message);
+			fail();
+		}
+		catch (Exception e) {
+			assertThat(e.getMessage()).isEqualTo("EL1005E: Type cannot be found 'java.lang.Runtime'");
+		}
+
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -151,7 +166,8 @@ public class RoutingFunctionTests {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Test
 	public void testInvocationWithRoutingBeanExpression() {
-		System.setProperty(FunctionProperties.PREFIX + ".routing-expression", "@reverse.apply(#root.getHeaders().get('func'))");
+		System.setProperty(FunctionProperties.PREFIX + ".routing-expression",
+				"@reverse.apply(#root.getHeaders().get('func'))");
 		FunctionCatalog functionCatalog = this.configureCatalog();
 		Function function = functionCatalog.lookup(RoutingFunction.FUNCTION_NAME);
 		assertThat(function).isNotNull();
@@ -170,16 +186,17 @@ public class RoutingFunctionTests {
 			Assertions.fail();
 		}
 		catch (Exception e) {
-			//ignore
+			// ignore
 		}
 
 		// non existing function
 		try {
-			function.apply(MessageBuilder.withPayload("hello").setHeader(FunctionProperties.PREFIX + ".definition", "blah").build());
+			function.apply(MessageBuilder.withPayload("hello")
+					.setHeader(FunctionProperties.PREFIX + ".definition", "blah").build());
 			Assertions.fail();
 		}
 		catch (Exception e) {
-			//ignore
+			// ignore
 		}
 	}
 
